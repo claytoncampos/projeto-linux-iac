@@ -1,0 +1,231 @@
+- name: Preparing Workstation
+  hosts: localhost
+  connection: local
+  become: true
+  vars:
+    usuario: clay 
+  tasks:
+
+    - name: Installing Linux Apps
+      apt:
+        name: '{{ item }}'
+        install_recommends: yes
+        state: latest
+      loop:
+          - vim
+          - htop
+          - curl
+          - wget
+          - tree
+          - ca-certificates
+          - lsb-release
+          - gnupg
+          - python3-pip
+          - git
+          - python3-setuptools
+          - bash-completion
+          - zsh
+          - flameshot
+          - fonts-hack
+          - tilix
+          - virtualbox
+          - mlocate
+          - krita
+          - jq
+          - mtr
+
+
+    - block:
+      - name: Verify if Oh-My-zsh is installed
+        command: test -d /home/{{ usuario }}/.oh-my-zsh
+        register: ohmyzsh
+        ignore_errors: true
+
+      - name: Installing Oh-My-zsh
+        shell:
+          cmd: 'curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh | bash'
+          warn: false
+        when: ohmyzsh.rc != 0
+
+     
+      - name: Changing Default Shell to ZSH
+        become: false
+        shell:      
+          cmd: chsh -s $(which zsh) 
+
+      - name: Installing zinit
+        shell:
+          cmd: 'curl --fail --show-error --silent --location https://raw.githubusercontent.com/zdharma-continuum/zinit/HEAD/scripts/install.sh | bash'
+
+      - name: Verify if powerlevel10k is installed
+        command: test -d /home/{{ usuario }}/.oh-my-zsh/custom/themes/powerlevel10k 
+        register: pw10k
+        ignore_errors: true
+
+
+      - name: Installing Theme Powerlevel10k
+        shell:
+          cmd: git clone --depth=1 https://github.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k
+        when: pw10k.rc != 0
+
+      - name: Changing Default ZSH Theme to powerlevel10k
+        lineinfile:
+          path: /home/{{ usuario }}/.zshrc
+          regexp: '^ZSH_THEME='
+          line: 'ZSH_THEME="powerlevel10k/powerlevel10k"'
+
+      - name: Adicionando Plugins do zsh
+        shell:
+          cmd: echo 'zinit light zdharma-continuum/fast-syntax-highlighting' >> ~/.zshrc; echo 'zinit light zsh-users/zsh-autosuggestions' >> ~/.zshrc; echo 'zinit light zsh-users/zsh-completions' >> ~/.zshrc
+
+      - name: Instalando fonte nerd e fira code
+        shell:
+          cmd: mkdir ~/.fonts ; wget -P ~/.fonts 'https://github.com/ryanoasis/nerd-fonts/releases/download/v2.1.0/BitstreamVeraSansMono.zip'; echo 'zinit light zsh-users/zsh-completions' >> ~/.zshrc ;unzip ~/.fonts/BitstreamVeraSansMono.zip -d ~/.fonts; sudo apt install fonts-firacode
+        
+
+      - name: Installing Vagrant 2.2.18
+        unarchive:
+          src: 'https://releases.hashicorp.com/vagrant/2.4.0/vagrant_2.4.0_linux_amd64.zip'
+          dest: /usr/local/bin
+          remote_src: yes
+
+      - name: Install Microsoft Key
+        become: true
+        apt_key:
+          url: 'https://packages.microsoft.com/keys/microsoft.asc'
+          state: present
+         
+      - name: Install VSCode Repository
+        apt_repository:
+          repo: 'deb [arch=amd64] https://packages.microsoft.com/repos/vscode stable main'
+          state: present
+          filename: vscode
+
+#      - name: Install Visual Studio Code
+#        apt:
+#          name: code
+#      - name: Install Virtual Studio Code Extensions
+#        shell:
+#          cmd: code --install-extension '{{ item }}' 
+#        loop: 
+#          - ms-python.python
+#          - ms-azuretools.vscode-docker
+#          - bbenoist.vagrant
+#          - gruntfuggly.todo-tree
+#          - njpwerner.autodocstring
+#          - eamodio.gitlens
+
+    - block: 
+      - name: Verify if docker installed
+        command: test -d /home/{{ usuario }}/.oh-my-zsh/custom/themes/powerlevel10k
+        register: docker
+        ignore_errors: true
+
+
+      - name: Install Docker Key
+        apt_key:
+          url: 'https://download.docker.com/linux/ubuntu/gpg'
+          state: present
+        when: docker.rc != 0    
+
+      - name: Install Docker Repository
+        apt_repository:
+          repo: 'deb [arch=amd64] hhttps://download.docker.com/linux/ubuntu jammy stable'
+          state: present
+          filename: docker-ce
+        when: docker.rc != 0
+
+      - name: Install Docker
+        apt:
+          name: docker-ce
+          state: latest
+        when: docker.rc != 0
+          
+      - name: Adding existing user root to group Docker
+        user: 
+          name: '{{ ansible_user_id }}'
+          groups: docker 
+          append: yes
+        when: docker.rc != 0
+
+      - name: Adding existing user {{ usuario }} to group Docker
+        user: 
+          name: '{{ usuario }}'
+          groups: docker 
+          append: yes
+        when: docker.rc != 0
+
+      - name: seting permission 0666 /var/run/docker.sock
+        ansible.builtin.file:
+          path: /var/run/docker.sock
+          owner: root
+          group: docker
+          mode: '0666' 
+        when: docker.rc != 0
+
+
+
+
+    - block:
+      - name: Verify if docker-compose installed
+        command: test -d /usr/local/bin/docker-compose
+        register: docker_compose
+        ignore_errors: true
+      
+      - name: Install Docker-Compose
+        become: true
+        get_url:
+          url: 'https://github.com/docker/compose/releases/download/1.26.2/docker-compose-Linux-x86_64'
+          dest: '/usr/local/bin/docker-compose'
+          mode: 755
+        when: docker_compose.rc != 0
+
+      - name: Install Docker Machine Bash Completion
+        get_url:
+          url: 'https://raw.githubusercontent.com/docker/machine/v0.16.0/contrib/completion/bash/docker-machine.bash'
+          dest: '/etc/bash_completion.d/docker-machine'
+      - name: Install Docker-Compose Bash Completion
+        get_url:
+          url: 'https://raw.githubusercontent.com/docker/compose/1.26.2/contrib/completion/bash/docker-compose'
+          dest: '/etc/bash_completion.d/docker-compose'
+
+      - name: Install Docker-Compose and Docker Machine Zsh Completion
+        lineinfile:
+          path: /home/{{ usuario }}/.zshrc
+          regexp: '^plugins='
+          line: 'plugins=(git docker docker-compose)'
+        
+      - name: Installing Kubectl 1.22.0
+        get_url:    
+          url: 'https://dl.k8s.io/release/v1.22.0/bin/linux/amd64/kubectl'
+          dest: /usr/local/bin/kubectl
+          mode: 755
+
+      - name: Downloading Kubectx and Kubens 
+        git:
+          repo: 'https://github.com/ahmetb/kubectx'
+          dest: /opt/kubectx 
+
+      - name: Creating Symlink to kubectx and kubens 
+        file:
+          src: '/opt/kubectx/{{ item }}'
+          dest: '/usr/local/bin/{{ item }}'
+          state: link
+        with_items:
+          - kubectx
+          - kubens  
+
+
+      - name: Install Brave Key
+        apt_key:
+          url: 'https://brave-browser-apt-release.s3.brave.com/brave-browser-archive-keyring.gpg'
+          state: present
+      - name: Install Brave Repository
+        apt_repository:
+          repo: 'deb [arch=amd64] https://brave-browser-apt-release.s3.brave.com/ stable main'
+          state: present
+          filename: brave
+      - name: Install Brave Browser
+        apt:
+          name: brave-browser
+
