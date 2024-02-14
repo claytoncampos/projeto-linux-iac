@@ -34,7 +34,9 @@ sh projeto-linux-iac/ubuntu_automate.sh
 ```bash
 sh projeto-linux-iac/install_zsh.sh
 ```
-
+6. Install docker and docker compose (linux Deepin)
+```bash
+sh projeto-linux-iac/docker_install_deepin_linux.sh
 
 # Author Information
 Created by [Clayton Campos](https://github.com/claytoncampos)
